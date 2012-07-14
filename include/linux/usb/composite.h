@@ -362,6 +362,8 @@ struct usb_composite_dev {
 
 	/* protects deactivations and delayed_status counts*/
 	spinlock_t			lock;
+	/* used by usb_composite_force_reset to avoid signalling switch changes */
+	bool				mute_switch;
 };
 
 extern int usb_string_id(struct usb_composite_dev *c);

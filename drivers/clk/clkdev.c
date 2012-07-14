@@ -74,7 +74,7 @@ struct clk *clk_get_sys(const char *dev_id, const char *con_id)
 	return cl ? cl->clk : ERR_PTR(-ENOENT);
 }
 EXPORT_SYMBOL(clk_get_sys);
-
+/*
 struct clk *clk_get(struct device *dev, const char *con_id)
 {
 	const char *dev_id = dev ? dev_name(dev) : NULL;
@@ -88,7 +88,7 @@ void clk_put(struct clk *clk)
 	__clk_put(clk);
 }
 EXPORT_SYMBOL(clk_put);
-
+*/
 void clkdev_add(struct clk_lookup *cl)
 {
 	mutex_lock(&clocks_mutex);

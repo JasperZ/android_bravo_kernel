@@ -2349,13 +2349,6 @@ config FB_PRE_INIT_FB
 	  Select this option if display contents should be inherited as set by
 	  the bootloader.
 
-config FB_MSM
-	tristate "MSM Framebuffer support"
-	depends on FB && ARCH_MSM
-	select FB_CFB_FILLRECT
-	select FB_CFB_COPYAREA
-	select FB_CFB_IMAGEBLIT
-
 config FB_MX3
 	tristate "MX3 Framebuffer support"
 	depends on FB && MX3_IPU
@@ -2437,3 +2430,7 @@ config FB_SH_MOBILE_MERAM
 	  2 YCbCr framebuffers to be configured.
 
 endmenu
+
+if !ARCH_MSM8X60
+source "drivers/video/msm/Kconfig"
+endif

@@ -8,6 +8,7 @@
  *	it under the terms of the GNU General Public License as published by
  *	the Free Software Foundation; either version 2 of the License, or
  *	(at your option) any later version.
+ *
  */
 
 #include <linux/kernel.h>
@@ -60,12 +61,12 @@ static struct usb_gadget_strings *uvc_function_strings[] = {
 #define UVC_INTF_VIDEO_STREAMING		1
 
 static struct usb_interface_assoc_descriptor uvc_iad __initdata = {
-	.bLength		= sizeof(uvc_iad),
+	.bLength		= USB_DT_INTERFACE_ASSOCIATION_SIZE,
 	.bDescriptorType	= USB_DT_INTERFACE_ASSOCIATION,
 	.bFirstInterface	= 0,
 	.bInterfaceCount	= 2,
 	.bFunctionClass		= USB_CLASS_VIDEO,
-	.bFunctionSubClass	= UVC_SC_VIDEO_INTERFACE_COLLECTION,
+	.bFunctionSubClass	= 0x03,
 	.bFunctionProtocol	= 0x00,
 	.iFunction		= 0,
 };
@@ -77,7 +78,7 @@ static struct usb_interface_descriptor uvc_control_intf __initdata = {
 	.bAlternateSetting	= 0,
 	.bNumEndpoints		= 1,
 	.bInterfaceClass	= USB_CLASS_VIDEO,
-	.bInterfaceSubClass	= UVC_SC_VIDEOCONTROL,
+	.bInterfaceSubClass	= 0x01,
 	.bInterfaceProtocol	= 0x00,
 	.iInterface		= 0,
 };
@@ -105,7 +106,7 @@ static struct usb_interface_descriptor uvc_streaming_intf_alt0 __initdata = {
 	.bAlternateSetting	= 0,
 	.bNumEndpoints		= 0,
 	.bInterfaceClass	= USB_CLASS_VIDEO,
-	.bInterfaceSubClass	= UVC_SC_VIDEOSTREAMING,
+	.bInterfaceSubClass	= 0x02,
 	.bInterfaceProtocol	= 0x00,
 	.iInterface		= 0,
 };
@@ -117,7 +118,7 @@ static struct usb_interface_descriptor uvc_streaming_intf_alt1 __initdata = {
 	.bAlternateSetting	= 1,
 	.bNumEndpoints		= 1,
 	.bInterfaceClass	= USB_CLASS_VIDEO,
-	.bInterfaceSubClass	= UVC_SC_VIDEOSTREAMING,
+	.bInterfaceSubClass	= 0x02,
 	.bInterfaceProtocol	= 0x00,
 	.iInterface		= 0,
 };
@@ -261,10 +262,8 @@ uvc_function_set_alt(struct usb_function *f, unsigned interface, unsigned alt)
 		if (uvc->state != UVC_STATE_CONNECTED)
 			return 0;
 
-		if (uvc->video.ep) {
-			uvc->video.ep->desc = &uvc_streaming_ep;
-			usb_ep_enable(uvc->video.ep);
-		}
+		if (uvc->video.ep)
+			usb_ep_enable(uvc->video.ep, &uvc_streaming_ep);
 
 		memset(&v4l2_event, 0, sizeof(v4l2_event));
 		v4l2_event.type = UVC_EVENT_STREAMON;
@@ -604,15 +603,15 @@ uvc_bind_config(struct usb_configuration *c,
 
 	/* Validate the descriptors. */
 	if (control == NULL || control[0] == NULL ||
-	    control[0]->bDescriptorSubType != UVC_VC_HEADER)
+	    control[0]->bDescriptorSubType != UVC_DT_HEADER)
 		goto error;
 
 	if (fs_streaming == NULL || fs_streaming[0] == NULL ||
-	    fs_streaming[0]->bDescriptorSubType != UVC_VS_INPUT_HEADER)
+	    fs_streaming[0]->bDescriptorSubType != UVC_DT_INPUT_HEADER)
 		goto error;
 
 	if (hs_streaming == NULL || hs_streaming[0] == NULL ||
-	    hs_streaming[0]->bDescriptorSubType != UVC_VS_INPUT_HEADER)
+	    hs_streaming[0]->bDescriptorSubType != UVC_DT_INPUT_HEADER)
 		goto error;
 
 	uvc->desc.control = control;
@@ -650,7 +649,7 @@ uvc_bind_config(struct usb_configuration *c,
 	if (ret)
 		kfree(uvc);
 
-	return ret;
+	return 0;
 
 error:
 	kfree(uvc);

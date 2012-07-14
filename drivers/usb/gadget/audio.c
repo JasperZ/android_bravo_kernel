@@ -14,8 +14,10 @@
 #include <linux/kernel.h>
 #include <linux/utsname.h>
 
+#include "u_audio.h"
+
 #define DRIVER_DESC		"Linux USB Audio Gadget"
-#define DRIVER_VERSION		"Feb 2, 2012"
+#define DRIVER_VERSION		"Dec 18, 2008"
 
 /*-------------------------------------------------------------------------*/
 
@@ -31,36 +33,8 @@
 #include "config.c"
 #include "epautoconf.c"
 
-/* string IDs are assigned dynamically */
-
-#define STRING_MANUFACTURER_IDX		0
-#define STRING_PRODUCT_IDX		1
-
-static char manufacturer[50];
-
-static struct usb_string strings_dev[] = {
-	[STRING_MANUFACTURER_IDX].s = manufacturer,
-	[STRING_PRODUCT_IDX].s = DRIVER_DESC,
-	{  } /* end of list */
-};
-
-static struct usb_gadget_strings stringtab_dev = {
-	.language = 0x0409,	/* en-us */
-	.strings = strings_dev,
-};
-
-static struct usb_gadget_strings *audio_strings[] = {
-	&stringtab_dev,
-	NULL,
-};
-
-#ifdef CONFIG_GADGET_UAC1
-#include "u_uac1.h"
-#include "u_uac1.c"
-#include "f_uac1.c"
-#else
-#include "f_uac2.c"
-#endif
+#include "u_audio.c"
+#include "f_audio.c"
 
 /*-------------------------------------------------------------------------*/
 
@@ -80,15 +54,9 @@ static struct usb_device_descriptor device_desc = {
 
 	.bcdUSB =		__constant_cpu_to_le16(0x200),
 
-#ifdef CONFIG_GADGET_UAC1
 	.bDeviceClass =		USB_CLASS_PER_INTERFACE,
 	.bDeviceSubClass =	0,
 	.bDeviceProtocol =	0,
-#else
-	.bDeviceClass =		USB_CLASS_MISC,
-	.bDeviceSubClass =	0x02,
-	.bDeviceProtocol =	0x01,
-#endif
 	/* .bMaxPacketSize0 = f(hardware) */
 
 	/* Vendor and product id defaults change according to what configs
@@ -137,12 +105,10 @@ static int __init audio_do_config(struct usb_configuration *c)
 
 static struct usb_configuration audio_config_driver = {
 	.label			= DRIVER_DESC,
+	.bind			= audio_do_config,
 	.bConfigurationValue	= 1,
 	/* .iConfiguration = DYNAMIC */
 	.bmAttributes		= USB_CONFIG_ATT_SELFPOWER,
-#ifndef CONFIG_GADGET_UAC1
-	.unbind			= uac2_unbind_config,
-#endif
 };
 
 /*-------------------------------------------------------------------------*/
@@ -179,7 +145,7 @@ static int __init audio_bind(struct usb_composite_dev *cdev)
 	strings_dev[STRING_PRODUCT_IDX].id = status;
 	device_desc.iProduct = status;
 
-	status = usb_add_config(cdev, &audio_config_driver, audio_do_config);
+	status = usb_add_config(cdev, &audio_config_driver);
 	if (status < 0)
 		goto fail;
 
@@ -192,9 +158,7 @@ fail:
 
 static int __exit audio_unbind(struct usb_composite_dev *cdev)
 {
-#ifdef CONFIG_GADGET_UAC1
 	gaudio_cleanup();
-#endif
 	return 0;
 }
 
@@ -202,13 +166,13 @@ static struct usb_composite_driver audio_driver = {
 	.name		= "g_audio",
 	.dev		= &device_desc,
 	.strings	= audio_strings,
-	.max_speed	= USB_SPEED_HIGH,
+	.bind		= audio_bind,
 	.unbind		= __exit_p(audio_unbind),
 };
 
 static int __init init(void)
 {
-	return usb_composite_probe(&audio_driver, audio_bind);
+	return usb_composite_register(&audio_driver);
 }
 module_init(init);
 

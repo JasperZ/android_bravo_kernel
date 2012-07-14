@@ -708,6 +708,7 @@ config USB_S2255
 
 endif # V4L_USB_DRIVERS
 
+
 #
 # PCI drivers configuration
 #
@@ -1222,3 +1223,6 @@ config VIDEO_MX2_EMMAPRP
 	    conversion.
 
 endif # V4L_MEM2MEM_DRIVERS
+
+# MSM camera does not require V4L2
+source "drivers/media/video/msm/Kconfig"

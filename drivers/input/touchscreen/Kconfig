@@ -442,6 +442,20 @@ config TOUCHSCREEN_MIGOR
 	  To compile this driver as a module, choose M here: the
 	  module will be called migor_ts.
 
+config TOUCHSCREEN_SYNAPTICS_I2C_RMI
+	tristate "Synaptics i2c touchscreen"
+	depends on I2C
+	help
+	  This enables support for Synaptics RMI over I2C based touchscreens.
+
+config TOUCHSCREEN_DUPLICATED_FILTER
+	bool "Touchscreen duplicated report filter"
+	depends on TOUCHSCREEN_SYNAPTICS_I2C_RMI
+	default n
+	help
+	  This enables filter for duplicated report in touchscreen driver
+	  This support will discard small movement report in touchscreen driver
+
 config TOUCHSCREEN_TNETV107X
 	tristate "TI TNETV107X touchscreen support"
 	depends on ARCH_DAVINCI_TNETV107X

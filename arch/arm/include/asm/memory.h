@@ -272,6 +272,8 @@ static inline __deprecated void *bus_to_virt(unsigned long x)
 #define virt_to_page(kaddr)	pfn_to_page(__pa(kaddr) >> PAGE_SHIFT)
 #define virt_addr_valid(kaddr)	((unsigned long)(kaddr) >= PAGE_OFFSET && (unsigned long)(kaddr) < (unsigned long)high_memory)
 
+#define PHYS_TO_NID(addr)	(0)
+
 /*
  * Optional coherency support.  Currently used only by selected
  * Intel XSC3-based systems.

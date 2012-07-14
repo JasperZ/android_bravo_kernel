@@ -362,7 +362,7 @@ __alloc_workqueue_key(const char *fmt, unsigned int flags, int max_active,
 	alloc_workqueue((name), WQ_FREEZABLE | WQ_UNBOUND | WQ_MEM_RECLAIM, 1)
 #define create_singlethread_workqueue(name)			\
 	alloc_workqueue((name), WQ_UNBOUND | WQ_MEM_RECLAIM, 1)
-
+#define create_rt_workqueue(name) alloc_workqueue((name), 0, 0, 1)
 extern void destroy_workqueue(struct workqueue_struct *wq);
 
 extern int queue_work(struct workqueue_struct *wq, struct work_struct *work);

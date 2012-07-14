@@ -217,7 +217,7 @@ int pm_qos_update_target(struct pm_qos_constraints *c, struct plist_node *node,
  *
  * This function returns the current target value.
  */
-int pm_qos_request(int pm_qos_class)
+int pm_qosd_request(int pm_qos_class)
 {
 	return pm_qos_read_value(pm_qos_array[pm_qos_class]->constraints);
 }
@@ -257,7 +257,7 @@ static void pm_qos_work_fn(struct work_struct *work)
  * removal.
  */
 
-void pm_qos_add_request(struct pm_qos_request *req,
+void pm_qosd_add_request(struct pm_qos_request *req,
 			int pm_qos_class, s32 value)
 {
 	if (!req) /*guard against callers passing in null */
@@ -284,7 +284,7 @@ EXPORT_SYMBOL_GPL(pm_qos_add_request);
  *
  * Attempts are made to make this code callable on hot code paths.
  */
-void pm_qos_update_request(struct pm_qos_request *req,
+void pm_qosd_update_request(struct pm_qos_request *req,
 			   s32 new_value)
 {
 	if (!req) /*guard against callers passing in null */
@@ -341,7 +341,7 @@ void pm_qos_update_request_timeout(struct pm_qos_request *req, s32 new_value,
  * recompute the current target value for the pm_qos_class.  Call this
  * on slow code paths.
  */
-void pm_qos_remove_request(struct pm_qos_request *req)
+void pm_qosd_remove_request(struct pm_qos_request *req)
 {
 	if (!req) /*guard against callers passing in null */
 		return;
@@ -370,7 +370,7 @@ EXPORT_SYMBOL_GPL(pm_qos_remove_request);
  * will register the notifier into a notification chain that gets called
  * upon changes to the pm_qos_class target value.
  */
-int pm_qos_add_notifier(int pm_qos_class, struct notifier_block *notifier)
+int pm_qosd_add_notifier(int pm_qos_class, struct notifier_block *notifier)
 {
 	int retval;
 
@@ -390,7 +390,7 @@ EXPORT_SYMBOL_GPL(pm_qos_add_notifier);
  * will remove the notifier from the notification chain that gets called
  * upon changes to the pm_qos_class target value.
  */
-int pm_qos_remove_notifier(int pm_qos_class, struct notifier_block *notifier)
+int pm_qosd_remove_notifier(int pm_qos_class, struct notifier_block *notifier)
 {
 	int retval;
 

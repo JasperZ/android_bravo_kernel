@@ -38,6 +38,7 @@ void vfp_support_entry(void);
 void vfp_null_entry(void);
 
 void (*vfp_vector)(void) = vfp_null_entry;
+union vfp_state *last_VFP_context[NR_CPUS];
 
 /*
  * Dual-use variable.
@@ -442,6 +443,53 @@ static void vfp_enable(void *unused)
 	 * Enable full access to VFP (cp10 and cp11)
 	 */
 	set_copro_access(access | CPACC_FULL(10) | CPACC_FULL(11));
+}
+
+int vfp_flush_context(void)
+{
+	unsigned long flags;
+	struct thread_info *ti;
+	u32 fpexc;
+	u32 cpu;
+	int saved = 0;
+
+	local_irq_save(flags);
+
+	ti = current_thread_info();
+	fpexc = fmrx(FPEXC);
+	cpu = ti->cpu;
+
+#ifdef CONFIG_SMP
+	/* On SMP, if VFP is enabled, save the old state */
+	if ((fpexc & FPEXC_EN) && last_VFP_context[cpu]) {
+		last_VFP_context[cpu]->hard.cpu = cpu;
+#else
+	/* If there is a VFP context we must save it. */
+	if (last_VFP_context[cpu]) {
+		/* Enable VFP so we can save the old state. */
+		fmxr(FPEXC, fpexc | FPEXC_EN);
+		isb();
+#endif
+		vfp_save_state(last_VFP_context[cpu], fpexc);
+
+		/* disable, just in case */
+		fmxr(FPEXC, fmrx(FPEXC) & ~FPEXC_EN);
+		saved = 1;
+	}
+	last_VFP_context[cpu] = NULL;
+
+	local_irq_restore(flags);
+
+	return saved;
+}
+
+void vfp_reinit(void)
+{
+	/* ensure we have access to the vfp */
+	vfp_enable(NULL);
+
+	/* and disable it to ensure the next usage restores the state */
+	fmxr(FPEXC, fmrx(FPEXC) & ~FPEXC_EN);
 }
 
 #ifdef CONFIG_CPU_PM

@@ -23,6 +23,7 @@
 #include <linux/sched.h>
 #include <linux/slab.h>
 #include <mach/msm_fb.h>
+#include <mach/debug_display.h>
 
 
 #define LCD_CONTROL_BLOCK_BASE 0x110000
@@ -98,7 +99,7 @@ static void toshiba_wait_vsync(struct msm_panel_data *panel_data)
 	}
 	if (wait_event_timeout(toshiba_vsync_wait, panel->toshiba_got_int,
 				HZ/2) == 0)
-		printk(KERN_ERR "timeout waiting for VSYNC\n");
+		PR_DISP_ERR( "timeout waiting for VSYNC\n");
 	panel->toshiba_got_int = 0;
 	/* interrupt clears when screen dma starts */
 }
@@ -115,7 +116,7 @@ static int toshiba_suspend(struct msm_panel_data *panel_data)
 
 	ret = bridge_data->uninit(bridge_data, client_data);
 	if (ret) {
-		printk(KERN_INFO "mddi toshiba client: non zero return from "
+		PR_DISP_INFO("mddi toshiba client: non zero return from "
 			"uninit\n");
 		return ret;
 	}
@@ -186,9 +187,13 @@ static int setup_vsync(struct panel_info *panel,
 		ret = 0;
 		goto uninit;
 	}
-	ret = gpio_request_one(gpio, GPIOF_IN, "vsync");
+	ret = gpio_request(gpio, "vsync");
 	if (ret)
 		goto err_request_gpio_failed;
+
+	ret = gpio_direction_input(gpio);
+	if (ret)
+		goto err_gpio_direction_input_failed;
 
 	ret = irq = gpio_to_irq(gpio);
 	if (ret < 0)
@@ -198,7 +203,7 @@ static int setup_vsync(struct panel_info *panel,
 			  "vsync", panel);
 	if (ret)
 		goto err_request_irq_failed;
-	printk(KERN_INFO "vsync on gpio %d now %d\n",
+	PR_DISP_INFO("vsync on gpio %d now %d\n",
 	       gpio, gpio_get_value(gpio));
 	return 0;
 
@@ -206,6 +211,7 @@ uninit:
 	free_irq(gpio_to_irq(gpio), panel);
 err_request_irq_failed:
 err_get_irq_num_failed:
+err_gpio_direction_input_failed:
 	gpio_free(gpio);
 err_request_gpio_failed:
 	return ret;

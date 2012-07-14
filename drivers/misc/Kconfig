@@ -498,6 +498,13 @@ config MAX8997_MUIC
 	  Maxim MAX8997 PMIC.
 	  The MAX8997 MUIC is a USB port accessory detector and switch.
 
+config SENSORS_BMA150_SPI
+        tristate "BMA150 G-sensor Driver"
+	depends on MICROP_COMMON
+        default y
+        help
+         BMA150 G-sensor Driver implemented by HTC.
+
 source "drivers/misc/c2port/Kconfig"
 source "drivers/misc/eeprom/Kconfig"
 source "drivers/misc/cb710/Kconfig"

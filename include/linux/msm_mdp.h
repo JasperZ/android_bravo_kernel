@@ -48,9 +48,10 @@ enum {
 #define MDP_ROT_90	0x4
 #define MDP_ROT_180	(MDP_FLIP_UD|MDP_FLIP_LR)
 #define MDP_ROT_270	(MDP_ROT_90|MDP_FLIP_UD|MDP_FLIP_LR)
+#define MDP_ROT_MASK	0x7
 #define MDP_DITHER	0x8
 #define MDP_BLUR	0x10
-
+#define MDP_BLEND_FG_PREMULT 0x20000
 #define MDP_TRANSP_NOP	0xffffffff
 #define MDP_ALPHA_NOP	0xff
 

@@ -5,7 +5,7 @@
  * Copyright (C) 2008 by David Brownell
  * Copyright (C) 2008 by Nokia Corporation
  * Copyright (C) 2009 by Samsung Electronics
- * Author: Michal Nazarewicz (mina86@mina86.com)
+ * Author: Michal Nazarewicz (m.nazarewicz@samsung.com)
  *
  * This software is distributed under the terms of the GNU General
  * Public License ("GPL") as published by the Free Software Foundation,
@@ -17,6 +17,7 @@
 #include <linux/slab.h>
 #include <linux/kernel.h>
 #include <linux/device.h>
+#include <linux/usb/android_composite.h>
 
 #include "u_serial.h"
 #include "gadget_chips.h"
@@ -39,6 +40,12 @@
  * descriptors (roughly equivalent to CDC Unions) may sometimes help.
  */
 
+struct acm_ep_descs {
+	struct usb_endpoint_descriptor	*in;
+	struct usb_endpoint_descriptor	*out;
+	struct usb_endpoint_descriptor	*notify;
+};
+
 struct f_acm {
 	struct gserial			port;
 	u8				ctrl_id, data_id;
@@ -52,7 +59,11 @@ struct f_acm {
 	 */
 	spinlock_t			lock;
 
+	struct acm_ep_descs		fs;
+	struct acm_ep_descs		hs;
+
 	struct usb_ep			*notify;
+	struct usb_endpoint_descriptor	*notify_desc;
 	struct usb_request		*notify_req;
 
 	struct usb_cdc_line_coding	port_line_coding;	/* 8-N-1 etc */
@@ -101,7 +112,7 @@ acm_iad_descriptor = {
 	.bInterfaceCount = 	2,	// control + data
 	.bFunctionClass =	USB_CLASS_COMM,
 	.bFunctionSubClass =	USB_CDC_SUBCLASS_ACM,
-	.bFunctionProtocol =	USB_CDC_ACM_PROTO_AT_V25TER,
+	.bFunctionProtocol =	USB_CDC_PROTO_NONE,
 	/* .iFunction =		DYNAMIC */
 };
 
@@ -234,42 +245,6 @@ static struct usb_descriptor_header *acm_hs_function[] = {
 	(struct usb_descriptor_header *) &acm_data_interface_desc,
 	(struct usb_descriptor_header *) &acm_hs_in_desc,
 	(struct usb_descriptor_header *) &acm_hs_out_desc,
-	NULL,
-};
-
-static struct usb_endpoint_descriptor acm_ss_in_desc = {
-	.bLength =		USB_DT_ENDPOINT_SIZE,
-	.bDescriptorType =	USB_DT_ENDPOINT,
-	.bmAttributes =		USB_ENDPOINT_XFER_BULK,
-	.wMaxPacketSize =	cpu_to_le16(1024),
-};
-
-static struct usb_endpoint_descriptor acm_ss_out_desc = {
-	.bLength =		USB_DT_ENDPOINT_SIZE,
-	.bDescriptorType =	USB_DT_ENDPOINT,
-	.bmAttributes =		USB_ENDPOINT_XFER_BULK,
-	.wMaxPacketSize =	cpu_to_le16(1024),
-};
-
-static struct usb_ss_ep_comp_descriptor acm_ss_bulk_comp_desc = {
-	.bLength =              sizeof acm_ss_bulk_comp_desc,
-	.bDescriptorType =      USB_DT_SS_ENDPOINT_COMP,
-};
-
-static struct usb_descriptor_header *acm_ss_function[] = {
-	(struct usb_descriptor_header *) &acm_iad_descriptor,
-	(struct usb_descriptor_header *) &acm_control_interface_desc,
-	(struct usb_descriptor_header *) &acm_header_desc,
-	(struct usb_descriptor_header *) &acm_call_mgmt_descriptor,
-	(struct usb_descriptor_header *) &acm_descriptor,
-	(struct usb_descriptor_header *) &acm_union_desc,
-	(struct usb_descriptor_header *) &acm_hs_notify_desc,
-	(struct usb_descriptor_header *) &acm_ss_bulk_comp_desc,
-	(struct usb_descriptor_header *) &acm_data_interface_desc,
-	(struct usb_descriptor_header *) &acm_ss_in_desc,
-	(struct usb_descriptor_header *) &acm_ss_bulk_comp_desc,
-	(struct usb_descriptor_header *) &acm_ss_out_desc,
-	(struct usb_descriptor_header *) &acm_ss_bulk_comp_desc,
 	NULL,
 };
 
@@ -431,28 +406,24 @@ static int acm_set_alt(struct usb_function *f, unsigned intf, unsigned alt)
 			usb_ep_disable(acm->notify);
 		} else {
 			VDBG(cdev, "init acm ctrl interface %d\n", intf);
-			if (config_ep_by_speed(cdev->gadget, f, acm->notify))
-				return -EINVAL;
 		}
-		usb_ep_enable(acm->notify);
+		acm->notify_desc = ep_choose(cdev->gadget,
+				acm->hs.notify,
+				acm->fs.notify);
+		usb_ep_enable(acm->notify, acm->notify_desc);
 		acm->notify->driver_data = acm;
 
 	} else if (intf == acm->data_id) {
 		if (acm->port.in->driver_data) {
 			DBG(cdev, "reset acm ttyGS%d\n", acm->port_num);
 			gserial_disconnect(&acm->port);
-		}
-		if (!acm->port.in->desc || !acm->port.out->desc) {
+		} else {
 			DBG(cdev, "activate acm ttyGS%d\n", acm->port_num);
-			if (config_ep_by_speed(cdev->gadget, f,
-					       acm->port.in) ||
-			    config_ep_by_speed(cdev->gadget, f,
-					       acm->port.out)) {
-				acm->port.in->desc = NULL;
-				acm->port.out->desc = NULL;
-				return -EINVAL;
-			}
 		}
+		acm->port.in_desc = ep_choose(cdev->gadget,
+				acm->hs.in, acm->fs.in);
+		acm->port.out_desc = ep_choose(cdev->gadget,
+				acm->hs.out, acm->fs.out);
 		gserial_connect(&acm->port, acm->port_num);
 
 	} else
@@ -659,10 +630,17 @@ acm_bind(struct usb_configuration *c, struct usb_function *f)
 	acm->notify_req->complete = acm_cdc_notify_complete;
 	acm->notify_req->context = acm;
 
-	/* copy descriptors */
+	/* copy descriptors, and track endpoint copies */
 	f->descriptors = usb_copy_descriptors(acm_fs_function);
 	if (!f->descriptors)
 		goto fail;
+
+	acm->fs.in = usb_find_endpoint(acm_fs_function,
+			f->descriptors, &acm_fs_in_desc);
+	acm->fs.out = usb_find_endpoint(acm_fs_function,
+			f->descriptors, &acm_fs_out_desc);
+	acm->fs.notify = usb_find_endpoint(acm_fs_function,
+			f->descriptors, &acm_fs_notify_desc);
 
 	/* support all relevant hardware speeds... we expect that when
 	 * hardware is dual speed, all bulk-capable endpoints work at
@@ -676,24 +654,19 @@ acm_bind(struct usb_configuration *c, struct usb_function *f)
 		acm_hs_notify_desc.bEndpointAddress =
 				acm_fs_notify_desc.bEndpointAddress;
 
-		/* copy descriptors */
-		f->hs_descriptors = usb_copy_descriptors(acm_hs_function);
-	}
-	if (gadget_is_superspeed(c->cdev->gadget)) {
-		acm_ss_in_desc.bEndpointAddress =
-			acm_fs_in_desc.bEndpointAddress;
-		acm_ss_out_desc.bEndpointAddress =
-			acm_fs_out_desc.bEndpointAddress;
-
 		/* copy descriptors, and track endpoint copies */
-		f->ss_descriptors = usb_copy_descriptors(acm_ss_function);
-		if (!f->ss_descriptors)
-			goto fail;
+		f->hs_descriptors = usb_copy_descriptors(acm_hs_function);
+
+		acm->hs.in = usb_find_endpoint(acm_hs_function,
+				f->hs_descriptors, &acm_hs_in_desc);
+		acm->hs.out = usb_find_endpoint(acm_hs_function,
+				f->hs_descriptors, &acm_hs_out_desc);
+		acm->hs.notify = usb_find_endpoint(acm_hs_function,
+				f->hs_descriptors, &acm_hs_notify_desc);
 	}
 
 	DBG(cdev, "acm ttyGS%d: %s speed IN/%s OUT/%s NOTIFY/%s\n",
 			acm->port_num,
-			gadget_is_superspeed(c->cdev->gadget) ? "super" :
 			gadget_is_dualspeed(c->cdev->gadget) ? "dual" : "full",
 			acm->port.in->name, acm->port.out->name,
 			acm->notify->name);
@@ -723,8 +696,6 @@ acm_unbind(struct usb_configuration *c, struct usb_function *f)
 
 	if (gadget_is_dualspeed(c->cdev->gadget))
 		usb_free_descriptors(f->hs_descriptors);
-	if (gadget_is_superspeed(c->cdev->gadget))
-		usb_free_descriptors(f->ss_descriptors);
 	usb_free_descriptors(f->descriptors);
 	gs_free_req(acm->notify, acm->notify_req);
 	kfree(acm);
@@ -812,3 +783,28 @@ int acm_bind_config(struct usb_configuration *c, u8 port_num)
 		kfree(acm);
 	return status;
 }
+
+#ifdef CONFIG_USB_ANDROID_ACM
+
+int acm_function_bind_config(struct usb_configuration *c)
+{
+	int ret = acm_bind_config(c, 0);
+	if (ret == 0)
+		gserial_setup(c->cdev->gadget, 1);
+	return ret;
+}
+
+static struct android_usb_function acm_function = {
+	.name = "acm",
+	.bind_config = acm_function_bind_config,
+};
+
+static int __init init(void)
+{
+	printk(KERN_INFO "f_acm init\n");
+	android_register_function(&acm_function);
+	return 0;
+}
+module_init(init);
+
+#endif /* CONFIG_USB_ANDROID_ACM */

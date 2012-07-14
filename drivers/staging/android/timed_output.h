@@ -24,6 +24,12 @@ struct timed_output_dev {
 
 	/* returns the current number of milliseconds remaining on the timer */
 	int		(*get_time)(struct timed_output_dev *sdev);
+	
+	/* set voltage */
+	void	(*set_level)(struct timed_output_dev *sdev, int level);
+
+	/* returns the current voltage */
+	int	(*get_level)(struct timed_output_dev *sdev);
 
 	/* private data */
 	struct device	*dev;
